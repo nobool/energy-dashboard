@@ -112,57 +112,73 @@ def fetch_semo_imbalance(start_date: str, end_date: str) -> pd.DataFrame:
 def fetch_semopx_ea001(start_date: str, end_date: str) -> pd.DataFrame:
     print(f"Fetching SEMOpx EA-001 data from {start_date} to {end_date}...")
     url = "https://reports.sem-o.com/api/v1/documents/static-reports"
-    all_data = []
     
-    params = {
-        'DPuG_ID': 'EA-001',
-        'ResourceName': 'MarketResult_SEM-DA_PWR-MRC-D',
-        'date_from': start_date,
-        'date_to': end_date,
-        'page_size': 500,
-        'order_by': 'DESC'
+    da_data = []
+    ida1_data = []
+    
+    resource_names = {
+        'SMP': 'MarketResult_SEM-DA_PWR-MRC-D',
+        'IDA1_Price': 'MarketResult_SEM-IDA1_PWR-MRC-D'
     }
-    try:
-        r = requests.get(url, params=params, timeout=10)
-        if os.getenv("ENVIRONMENT") == "DEVELOPMENT":
-            length = len(r.json().get('items', [])) if r.status_code == 200 and r.json().get('items') else 0
-            print(f"[DEV] HTTP GET {r.url} - Response length: {length} items")
-        if r.status_code == 200 and r.json().get('items'):
-            for item in r.json()['items']:
-                doc_id = item['_id']
-                # The document content itself is served as JSON arrays from the api endpoint
-                doc_url = f"https://reports.sem-o.com/api/v1/documents/{doc_id}"
-                doc_resp = requests.get(doc_url, timeout=10)
-                if os.getenv("ENVIRONMENT") == "DEVELOPMENT":
-                    length = len(doc_resp.json().get('rows', [])) if doc_resp.status_code == 200 and isinstance(doc_resp.json(), dict) else 0
-                    print(f"[DEV] HTTP GET {doc_resp.url} - Response length: {length} row sections")
-                if doc_resp.status_code == 200:
-                    payload = doc_resp.json()
-                    if isinstance(payload, dict) and 'rows' in payload:
-                        for section in payload['rows']:
-                            dates = None
-                            prices = None
-                            for i, row in enumerate(section):
-                                if len(row) >= 3 and row[0] == 'Index prices' and row[2] == 'EUR':
-                                    if i + 2 < len(section):
-                                        dates = section[i+1]
-                                        prices = section[i+2]
-                                        break
-                            if dates and prices and len(dates) == len(prices):
-                                for d, p in zip(dates, prices):
-                                    all_data.append({
-                                        'Datetime': pd.to_datetime(d),
-                                        'SMP': float(p)
-                                    })
-                                break # break outer loop after extracting one valid area's EUR prices
-            time.sleep(SEMOPX_DELAY_S)
-    except Exception as e:
-        print(f"SEMOpx API error: {e}")
+    
+    for price_col, res_name in resource_names.items():
+        params = {
+            'DPuG_ID': 'EA-001',
+            'ResourceName': res_name,
+            'date_from': start_date,
+            'date_to': end_date,
+            'page_size': 500,
+            'order_by': 'DESC'
+        }
+        try:
+            r = requests.get(url, params=params, timeout=10)
+            if os.getenv("ENVIRONMENT") == "DEVELOPMENT":
+                length = len(r.json().get('items', [])) if r.status_code == 200 and r.json().get('items') else 0
+                print(f"[DEV] HTTP GET {r.url} - Response length: {length} items")
+            if r.status_code == 200 and r.json().get('items'):
+                for item in r.json()['items']:
+                    doc_id = item['_id']
+                    # The document content itself is served as JSON arrays from the api endpoint
+                    doc_url = f"https://reports.sem-o.com/api/v1/documents/{doc_id}"
+                    doc_resp = requests.get(doc_url, timeout=10)
+                    if os.getenv("ENVIRONMENT") == "DEVELOPMENT":
+                        length = len(doc_resp.json().get('rows', [])) if doc_resp.status_code == 200 and isinstance(doc_resp.json(), dict) else 0
+                        print(f"[DEV] HTTP GET {doc_resp.url} - Response length: {length} row sections")
+                    if doc_resp.status_code == 200:
+                        payload = doc_resp.json()
+                        if isinstance(payload, dict) and 'rows' in payload:
+                            for section in payload['rows']:
+                                dates = None
+                                prices = None
+                                for i, row in enumerate(section):
+                                    if len(row) >= 3 and row[0] == 'Index prices' and row[2] == 'EUR':
+                                        if i + 2 < len(section):
+                                            dates = section[i+1]
+                                            prices = section[i+2]
+                                            break
+                                if dates and prices and len(dates) == len(prices):
+                                    for d, p in zip(dates, prices):
+                                        if price_col == 'SMP':
+                                            da_data.append({'Datetime': pd.to_datetime(d), 'SMP': float(p)})
+                                        else:
+                                            ida1_data.append({'Datetime': pd.to_datetime(d), 'IDA1_Price': float(p)})
+                                    break # break outer loop after extracting one valid area's EUR prices
+                time.sleep(SEMOPX_DELAY_S)
+        except Exception as e:
+            print(f"SEMOpx API error for {res_name}: {e}")
                 
-    if not all_data:
-        raise ConnectionError(f"EA-001 data not found for {start_date} to {end_date}.")
+    if not da_data:
+        raise ConnectionError(f"EA-001 DA data not found for {start_date} to {end_date}.")
 
-    df = pd.DataFrame(all_data).drop_duplicates(subset=['Datetime'])
+    df_da = pd.DataFrame(da_data).drop_duplicates(subset=['Datetime'])
+    df_ida1 = pd.DataFrame(ida1_data).drop_duplicates(subset=['Datetime']) if ida1_data else pd.DataFrame(columns=['Datetime', 'IDA1_Price'])
+    
+    if not df_ida1.empty:
+        df = pd.merge(df_da, df_ida1, on='Datetime', how='outer')
+    else:
+        df = df_da
+        df['IDA1_Price'] = pd.NA
+        
     df['Datetime'] = pd.to_datetime(df['Datetime']).dt.tz_localize(None)
     return df
 

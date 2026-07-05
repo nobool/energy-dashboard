@@ -8,8 +8,8 @@ def main():
     parser.add_argument("--full-backfill", action="store_true", help="Fetch full history")
     args = parser.parse_args()
 
-    start_date = "2026-06-22" 
-    end_date = "2026-06-29" 
+    start_date = "2026-06-29" 
+    end_date = "2026-07-04" 
 
     print(f"Starting LIVE data pipeline (start: {start_date}, end: {end_date})")
 

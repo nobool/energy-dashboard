@@ -11,9 +11,18 @@ def process_and_merge(ea_df, isp_df, eirgrid_df, entsoe_df):
     # Forward fill missing values caused by different publication frequencies
     smp_raw['SMP'] = smp_raw['SMP'].ffill().bfill()
     smp_raw['ISP'] = smp_raw['ISP'].ffill().bfill()
+    if 'IDA1_Price' in smp_raw.columns:
+        smp_raw['IDA1_Price'] = smp_raw['IDA1_Price'].ffill().bfill()
     
     s_hourly = smp_raw.set_index('Datetime').resample('1h').mean().reset_index()
+    if 'IDA1_Price' in s_hourly.columns:
+        s_hourly['IDA1_Spread'] = s_hourly['IDA1_Price'] - s_hourly['SMP']
+        
     e_hourly = eirgrid_df.set_index('Datetime').resample('1h').mean().reset_index()
+    # EirGrid InterconnectorFlow: Imports are often positive. 
+    imports = e_hourly['InterconnectorFlow'].clip(lower=0)
+    exports = e_hourly['InterconnectorFlow'].clip(upper=0).abs()
+    e_hourly['SNSP_Pct'] = ((e_hourly['WindGeneration'] + imports) / (e_hourly['SystemDemand'] + exports)) * 100
     
     smp_prices = s_hourly.copy()
     smp_prices.to_csv(DATA_DIR / "smp_prices.csv", index=False)
