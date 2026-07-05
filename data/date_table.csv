@@ -1,0 +1,9 @@
+Date,Year,Month,MonthName,Day,DayOfWeek,DayName,IsWeekend,Quarter
+2026-06-22,2026,6,June,22,0,Monday,False,2
+2026-06-23,2026,6,June,23,1,Tuesday,False,2
+2026-06-24,2026,6,June,24,2,Wednesday,False,2
+2026-06-25,2026,6,June,25,3,Thursday,False,2
+2026-06-26,2026,6,June,26,4,Friday,False,2
+2026-06-27,2026,6,June,27,5,Saturday,True,2
+2026-06-28,2026,6,June,28,6,Sunday,True,2
+2026-06-29,2026,6,June,29,0,Monday,False,2
