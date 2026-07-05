@@ -7,9 +7,9 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from components.metrics import load_data
 from components.sidebar import render_sidebar
 
-st.set_page_config(page_title="Price Analysis", page_icon="💰", layout="wide")
+st.set_page_config(page_title="Price Analysis", layout="wide")
 render_sidebar()
-st.title("💰 Price Analysis")
+st.title("Price Analysis")
 
 smp_df, _, _ = load_data()
 

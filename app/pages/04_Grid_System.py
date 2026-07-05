@@ -7,9 +7,9 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from components.metrics import load_data
 from components.sidebar import render_sidebar
 
-st.set_page_config(page_title="Grid & System", page_icon="🌐", layout="wide")
+st.set_page_config(page_title="Grid & System", layout="wide")
 render_sidebar()
-st.title("🌐 Grid & System Conditions")
+st.title("Grid & System Conditions")
 
 _, grid_df, _ = load_data()
 

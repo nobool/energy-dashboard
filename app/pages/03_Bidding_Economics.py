@@ -7,17 +7,17 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from components.metrics import load_data
 from components.sidebar import render_sidebar
 
-st.set_page_config(page_title="Bidding Economics", page_icon="🏭", layout="wide")
+st.set_page_config(page_title="Bidding Economics", layout="wide")
 render_sidebar()
-st.title("🏭 Bidding Economics (Spark Spread)")
-st.markdown("Calculate spark spread and gross margin based on real-time market inputs.")
+st.title("Bidding Economics (Spark Spread)")
+st.write("Rough estimates for spark spread and plant margins.")
 
 _, _, spark_df = load_data()
 
 if spark_df.empty:
     st.warning("Data not available.")
 else:
-    st.sidebar.markdown("### 🎛️ Cost Assumptions")
+    st.sidebar.markdown("### Cost Assumptions")
     gas_price = st.sidebar.slider("Gas Price (€/MWh)", 10.0, 150.0, 30.0, step=1.0)
     carbon_price = st.sidebar.slider("Carbon Price (€/tonne)", 10.0, 150.0, 70.0, step=1.0)
     

@@ -5,14 +5,10 @@ import os
 def load_data():
     @st.cache_data
     def fetch_csv(path):
-        try:
-            df = pd.read_csv(path)
-            if 'Datetime' in df.columns:
-                df['Datetime'] = pd.to_datetime(df['Datetime'])
-            return df
-        except Exception as e:
-            st.error(f"Error loading {path}: {e}")
-            return pd.DataFrame()
+        df = pd.read_csv(path)
+        if 'Datetime' in df.columns:
+            df['Datetime'] = pd.to_datetime(df['Datetime'])
+        return df
             
     # Assuming app is run from energy-dashboard root
     data_dir = 'data'
