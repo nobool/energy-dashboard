@@ -20,12 +20,9 @@ def main():
 
     process_and_merge(ea_df, isp_df, eirgrid_df, entsoe_df)
     
-    try:
-        import pandas as pd
-        smp_df = pd.merge(ea_df, isp_df, on='Datetime', how='outer')
-        validate_market_data(smp_df, eirgrid_df, entsoe_df)
-    except Exception as e:
-        print("Validation warning:", e)
+    import pandas as pd
+    smp_df = pd.merge(ea_df, isp_df, on='Datetime', how='outer')
+    validate_market_data(smp_df, eirgrid_df, entsoe_df)
     
     
 

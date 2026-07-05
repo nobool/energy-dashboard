@@ -1,14 +1,10 @@
 # I-SEM Market Dashboard
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](#) 
-[![Power BI Report](https://img.shields.io/badge/PowerBI-View_Report-F2C811?logo=powerbi&logoColor=black)](#)
+A side project to track and analyze Irish electricity market (I-SEM) data. I built this to get a better feel for ex-ante bidding dynamics, wind generation impacts, and spark spreads for thermal units.
 
-## Overview
-A dual-output analytical dashboard backed by a shared Python data pipeline. It extracts real-time and historical market data from the Single Electricity Market (I-SEM) and the EirGrid Smart Grid, providing key insights for trading optimization and risk management.
+The pipeline pulls data from EirGrid, SEMOpx, and ENTSO-E and dumps it into some clean CSVs. There's a Streamlit app to quickly visualize price trends and a Power BI dashboard for higher-level reporting.
 
-
-## Architecture
-- **Data Pipeline:** Python (`pandas`, `requests`) fetching data from EirGrid, SEMOpx, and ENTSO-E APIs.
-- **Data Storage:** Processed CSV files.
-- **Front-end 1:** Streamlit application for fast, interactive technical analysis.
-- **Front-end 2:** Power BI report for business stakeholder review.
+## What's in here
+- `pipeline/`: Scripts to fetch and clean the market data.
+- `app/`: The Streamlit dashboard files.
+- `data/`: Extracted CSV files.

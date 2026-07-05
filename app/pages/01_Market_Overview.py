@@ -8,9 +8,9 @@ from components.metrics import load_data
 from components.charts import plot_smp_timeseries, plot_demand_wind_area
 from components.sidebar import render_sidebar
 
-st.set_page_config(page_title="Market Overview", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Market Overview", layout="wide")
 render_sidebar()
-st.title("📊 Market Overview")
+st.title("Market Overview")
 
 smp_df, grid_df, _ = load_data()
 
