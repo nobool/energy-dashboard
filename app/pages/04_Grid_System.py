@@ -9,9 +9,10 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from components.metrics import load_data
 from components.sidebar import render_sidebar
 
-st.set_page_config(page_title="Grid & System", layout="wide")
+st.set_page_config(page_title="Grid & System", layout="wide",page_icon="⚡")
 render_sidebar()
-st.title("Grid & System Conditions")
+from components.header import render_header
+render_header("Grid & System Conditions")
 
 smp_df, grid_df, _ = load_data()
 
@@ -39,3 +40,4 @@ else:
     fig.update_yaxes(title_text="Net Flow (MW)", secondary_y=True)
     
     st.plotly_chart(fig, use_container_width=True)
+    st.caption("*Note: Nord Pool N2EX was used as the GB Day-Ahead Price due to fairly small price variance compared to EPEX Spot. A single source was chosen since the markets are no longer implicitly coupled post-Brexit.*")

@@ -9,9 +9,10 @@ from components.metrics import load_data
 from components.sidebar import render_sidebar
 from components.charts import MARKET_COLORS
 
-st.set_page_config(page_title="Price Analysis", layout="wide")
+st.set_page_config(page_title="Price Analysis", layout="wide",page_icon="⚡")
 render_sidebar()
-st.title("Price Analysis")
+from components.header import render_header
+render_header("Price Analysis")
 
 smp_df, _, _ = load_data()
 
@@ -24,6 +25,15 @@ else:
     st.markdown("### Market vs Imbalance Comparison")
     metric_choice = st.radio("Select Metric:", ("Price", "Volume"), horizontal=True, index=1)
     
+    def plot_market_comparison(market, metric, benchmark, y_title, col):
+        col_name = f'{market}_{metric}'
+        if col_name in smp_df.columns:
+            fig_comp = go.Figure()
+            fig_comp.add_trace(go.Scatter(x=smp_df['Datetime'], y=smp_df[col_name], name=f'{market} {metric}', line=dict(color=MARKET_COLORS.get(market, 'blue'))))
+            fig_comp.add_trace(go.Scatter(x=smp_df['Datetime'], y=smp_df[benchmark], name=benchmark, line=dict(color=MARKET_COLORS[benchmark])))
+            fig_comp.update_layout(title=f'{market} {metric} vs {benchmark}', xaxis_title="Date", yaxis_title=y_title)
+            col.plotly_chart(fig_comp, use_container_width=True)
+
     if metric_choice == "Price":
         st.write("Comparing Market Price vs Imbalance Settlement Price (ISP)")
         comp_col1, comp_col2 = st.columns(2)
@@ -31,12 +41,7 @@ else:
         
         markets = [("DAM", comp_col1), ("IDA1", comp_col2), ("IDA2", comp_col3), ("IDA3", comp_col4)]
         for market, col in markets:
-            if f'{market}_Price' in smp_df.columns:
-                fig_comp = go.Figure()
-                fig_comp.add_trace(go.Scatter(x=smp_df['Datetime'], y=smp_df[f'{market}_Price'], name=f'{market} Price', line=dict(color=MARKET_COLORS.get(market, 'blue'))))
-                fig_comp.add_trace(go.Scatter(x=smp_df['Datetime'], y=smp_df['ISP'], name='ISP', line=dict(color=MARKET_COLORS['ISP'])))
-                fig_comp.update_layout(title=f'{market} Price vs ISP', xaxis_title="Date", yaxis_title="€/MWh")
-                col.plotly_chart(fig_comp, use_container_width=True)
+            plot_market_comparison(market, "Price", "ISP", "€/MWh", col)
                 
     else:
         st.write("Comparing Market Volume vs Net Imbalance Volume (NIV)")
@@ -45,18 +50,13 @@ else:
         
         markets = [("DAM", comp_col1), ("IDA1", comp_col2), ("IDA2", comp_col3), ("IDA3", comp_col4)]
         for market, col in markets:
-            if f'{market}_Volume' in smp_df.columns:
-                fig_comp = go.Figure()
-                fig_comp.add_trace(go.Scatter(x=smp_df['Datetime'], y=smp_df[f'{market}_Volume'], name=f'{market} Volume', line=dict(color=MARKET_COLORS.get(market, 'blue'))))
-                fig_comp.add_trace(go.Scatter(x=smp_df['Datetime'], y=smp_df['NIV'], name='NIV', line=dict(color=MARKET_COLORS['NIV'])))
-                fig_comp.update_layout(title=f'{market} Volume vs NIV', xaxis_title="Date", yaxis_title="MW/MWh")
-                col.plotly_chart(fig_comp, use_container_width=True)
+            plot_market_comparison(market, "Volume", "NIV", "MW/MWh", col)
 
     st.markdown("### Market Price vs ISP Variance (Spread)")
     col1, col2 = st.columns(2)
     col3, col4 = st.columns(2)
     
-    variance_color = 'gray'
+    variance_color = 'blue'
     
     if 'DAM_Spread_to_ISP' in smp_df.columns:
         fig_dam = px.line(smp_df, x='Datetime', y='DAM_Spread_to_ISP', title='DAM Spread (DAM - ISP)')
