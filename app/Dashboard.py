@@ -15,4 +15,10 @@ st.markdown("""
 This dashboard provides a quick look into the Irish Single Electricity Market (I-SEM). 
 
 You can use the sidebar to jump between different views: checking recent prices, estimating thermal plant margins, or looking at system demand and wind generation.
+
+- **Market Overview**: High-level KPIs and trends.
+- **Price Analysis**: Deep dive into SMP and imbalance prices.
+- **Bidding Economics**: Explore spark spreads and margins based on user-defined inputs.
+- **Grid & System**: Analyze wind penetration, demand, and interconnectors.
+- **Methodology**: Understand how this data is fetched and validated.
 """)
