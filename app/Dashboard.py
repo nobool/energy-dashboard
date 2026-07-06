@@ -10,7 +10,7 @@ st.set_page_config(
     page_icon="⚡"
 )
 
-from app.components.header import render_header
+from components.header import render_header
 render_header("I-SEM Market Dashboard")
 st.markdown("""
 This dashboard provides a quick look into the Irish Single Electricity Market (I-SEM). 
