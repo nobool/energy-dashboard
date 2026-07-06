@@ -1,5 +1,7 @@
 import streamlit as st
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import sys
 import os
 
@@ -11,25 +13,29 @@ st.set_page_config(page_title="Grid & System", layout="wide")
 render_sidebar()
 st.title("Grid & System Conditions")
 
-_, grid_df, _ = load_data()
+smp_df, grid_df, _ = load_data()
 
-if grid_df.empty:
+if grid_df.empty or smp_df.empty:
     st.warning("Data not available.")
 else:
-    col1, col2 = st.columns(2)
+    st.markdown("### I-SEM vs GB Prices and Interconnector Flows")
     
-    with col1:
-        st.markdown("### CO2 Intensity Trend")
-        if 'CO2Intensity' in grid_df.columns:
-            fig = px.line(grid_df, x='Datetime', y='CO2Intensity', labels={'CO2Intensity':'CO2 Intensity (gCO2/kWh)'})
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("CO2 Intensity data not available.")
-            
-    with col2:
-        st.markdown("### Interconnector Flows")
-        if 'InterconnectorFlow' in grid_df.columns:
-            fig2 = px.line(grid_df, x='Datetime', y='InterconnectorFlow', labels={'InterconnectorFlow':'Net Flow (MW)'})
-            st.plotly_chart(fig2, use_container_width=True)
-        else:
-            st.info("Interconnector flow data not available.")
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    
+    if 'DAM_Price' in smp_df.columns:
+        fig.add_trace(go.Scatter(x=smp_df['Datetime'], y=smp_df['DAM_Price'], name='I-SEM DAM Price'), secondary_y=False)
+    if 'GB_DA_Price' in smp_df.columns:
+        fig.add_trace(go.Scatter(x=smp_df['Datetime'], y=smp_df['GB_DA_Price'], name='GB DA Price'), secondary_y=False)
+        
+    if 'InterconnectorFlow' in grid_df.columns:
+        fig.add_trace(go.Scatter(x=grid_df['Datetime'], y=grid_df['InterconnectorFlow'], name='Net Flow (MW)'), secondary_y=True)
+        
+    fig.update_layout(
+        xaxis_title="Date",
+        hovermode="x unified"
+    )
+    
+    fig.update_yaxes(title_text="Price (€/MWh)", secondary_y=False)
+    fig.update_yaxes(title_text="Net Flow (MW)", secondary_y=True)
+    
+    st.plotly_chart(fig, use_container_width=True)

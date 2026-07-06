@@ -5,7 +5,6 @@ import pandas as pd
 from datetime import timedelta
 import xml.etree.ElementTree as ET
 from pipeline.config import SEMOPX_DELAY_S, EIRGRID_DELAY_S, ENTSOE_DELAY_S
-from entsoe import EntsoePandasClient
 
 def fetch_eirgrid_metric(start_date: str, end_date: str, chart_type: str, areas: str) -> pd.DataFrame:
     headers = {'User-Agent': 'Mozilla/5.0', 'Eirgrid-Content-Request': 'Nextjs'}
@@ -48,6 +47,13 @@ def fetch_eirgrid_data(start_date: str, end_date: str) -> pd.DataFrame:
         wind = wind.rename(columns={'wind': 'WindGeneration'})
         demand = pd.merge(demand, wind, on='Datetime', how='outer')
         
+    solar = fetch_eirgrid_metric(start_date, end_date, 'solar', 'solaractual')
+    if not solar.empty:
+        solar = solar.rename(columns={'solar': 'SolarGeneration'})
+        demand = pd.merge(demand, solar, on='Datetime', how='outer')
+    else:
+        demand['SolarGeneration'] = 0.0
+        
     co2 = fetch_eirgrid_metric(start_date, end_date, 'co2', 'co2intensity')
     if not co2.empty:
         co2 = co2.rename(columns={'co2': 'CO2Intensity'})
@@ -89,10 +95,12 @@ def fetch_semo_imbalance(start_date: str, end_date: str) -> pd.DataFrame:
                 for elem in root.findall('PUB_30MinAvgImbalPrc'):
                     start_time = elem.get('StartTime')
                     isp_str = elem.get('ImbalanceSettlementPrice')
+                    niv_str = elem.get('NetImbalanceVolume')
                     if start_time and isp_str:
                         all_data.append({
                             'Datetime': pd.to_datetime(start_time),
-                            'ISP': float(isp_str)
+                            'ISP': float(isp_str),
+                            'NIV': float(niv_str) if niv_str else 0.0
                         })
         time.sleep(SEMOPX_DELAY_S)
 
@@ -100,22 +108,25 @@ def fetch_semo_imbalance(start_date: str, end_date: str) -> pd.DataFrame:
         raise ConnectionError(f"Could not fetch SEMO Imbalance data for {start_date} to {end_date}.")
         
     df = pd.DataFrame(all_data).drop_duplicates(subset=['Datetime'])
-    df['Datetime'] = pd.to_datetime(df['Datetime']).dt.tz_localize(None)
+    # SEMO Imbalance returns naive UTC strings, so localize to UTC then convert to Dublin
+    df['Datetime'] = pd.to_datetime(df['Datetime']).dt.tz_localize('UTC').dt.tz_convert('Europe/Dublin').dt.tz_localize(None)
     return df
 
 def fetch_semopx_ea001(start_date: str, end_date: str) -> pd.DataFrame:
     print(f"Fetching SEMOpx EA-001 data from {start_date} to {end_date}...")
     url = "https://reports.sem-o.com/api/v1/documents/static-reports"
     
-    da_data = []
-    ida1_data = []
+    market_data = {}
     
     resource_names = {
-        'SMP': 'MarketResult_SEM-DA_PWR-MRC-D',
-        'IDA1_Price': 'MarketResult_SEM-IDA1_PWR-MRC-D'
+        'DAM': 'MarketResult_SEM-DA_PWR-MRC-D',
+        'IDA1': 'MarketResult_SEM-IDA1_PWR-SEM-GB-D',
+        'IDA2': 'MarketResult_SEM-IDA2_PWR-SEM-GB-D_',
+        'IDA3': 'MarketResult_SEM-IDA3_PWR-SEM-D_'
     }
     
-    for price_col, res_name in resource_names.items():
+    for market, res_name in resource_names.items():
+        market_list = []
         params = {
             'DPuG_ID': 'EA-001',
             'ResourceName': res_name,
@@ -131,76 +142,87 @@ def fetch_semopx_ea001(start_date: str, end_date: str) -> pd.DataFrame:
         if r.status_code == 200 and r.json().get('items'):
             for item in r.json()['items']:
                 doc_id = item['_id']
-                # The document content itself is served as JSON arrays from the api endpoint
                 doc_url = f"https://reports.sem-o.com/api/v1/documents/{doc_id}"
                 doc_resp = requests.get(doc_url, timeout=10)
-                if os.getenv("ENVIRONMENT") == "DEVELOPMENT":
-                    length = len(doc_resp.json().get('rows', [])) if doc_resp.status_code == 200 and isinstance(doc_resp.json(), dict) else 0
-                    print(f"[DEV] HTTP GET {doc_resp.url} - Response length: {length} row sections")
                 if doc_resp.status_code == 200:
                     payload = doc_resp.json()
                     if isinstance(payload, dict) and 'rows' in payload:
                         for section in payload['rows']:
                             dates = None
                             prices = None
+                            volumes = None
                             for i, row in enumerate(section):
                                 if len(row) >= 3 and row[0] == 'Index prices' and row[2] == 'EUR':
                                     if i + 2 < len(section):
                                         dates = section[i+1]
                                         prices = section[i+2]
-                                        break
-                            if dates and prices and len(dates) == len(prices):
-                                for d, p in zip(dates, prices):
-                                    if price_col == 'SMP':
-                                        da_data.append({'Datetime': pd.to_datetime(d), 'SMP': float(p)})
-                                    else:
-                                        ida1_data.append({'Datetime': pd.to_datetime(d), 'IDA1_Price': float(p)})
-                                break # break outer loop after extracting one valid area's EUR prices
+                                elif len(row) >= 1 and row[0] in ('Traded volume', 'Index volumes', 'Traded Volume'):
+                                    if i + 2 < len(section):
+                                        if not dates: 
+                                            dates = section[i+1]
+                                        volumes = section[i+2]
+                            if dates and prices:
+                                for idx, d in enumerate(dates):
+                                    p = float(prices[idx]) if idx < len(prices) else None
+                                    v = float(volumes[idx]) if volumes and idx < len(volumes) and volumes[idx] else 0.0
+                                    if p is not None:
+                                        market_list.append({
+                                            'Datetime': pd.to_datetime(d), 
+                                            f'{market}_Price': p,
+                                            f'{market}_Volume': v
+                                        })
+                                break
             time.sleep(SEMOPX_DELAY_S)
+        
+        if market_list:
+            df_m = pd.DataFrame(market_list).drop_duplicates(subset=['Datetime'])
+            market_data[market] = df_m
                 
-    if not da_data:
-        raise ConnectionError(f"EA-001 DA data not found for {start_date} to {end_date}.")
+    if 'DAM' not in market_data or market_data['DAM'].empty:
+        raise ConnectionError(f"EA-001 DAM data not found for {start_date} to {end_date}.")
 
-    df_da = pd.DataFrame(da_data).drop_duplicates(subset=['Datetime'])
-    df_ida1 = pd.DataFrame(ida1_data).drop_duplicates(subset=['Datetime']) if ida1_data else pd.DataFrame(columns=['Datetime', 'IDA1_Price'])
+    df_final = market_data['DAM']
+    for m in ['IDA1', 'IDA2', 'IDA3']:
+        if m in market_data and not market_data[m].empty:
+            df_final = pd.merge(df_final, market_data[m], on='Datetime', how='outer')
+        else:
+            df_final[f'{m}_Price'] = pd.NA
+            df_final[f'{m}_Volume'] = pd.NA
+            
+    # SEMOpx dates have 'Z' (UTC), so to_datetime parses as tz-aware UTC. Convert to Dublin then strip tz.
+    df_final['Datetime'] = pd.to_datetime(df_final['Datetime'], utc=True).dt.tz_convert('Europe/Dublin').dt.tz_localize(None)
+    return df_final
+
+def fetch_nordpool_gb_da(start_date: str, end_date: str) -> pd.DataFrame:
+    print(f"Fetching Nordpool GB DA data from {start_date} to {end_date}...")
+    fetched_data = []
     
-    if not df_ida1.empty:
-        df = pd.merge(df_da, df_ida1, on='Datetime', how='outer')
-    else:
-        df = df_da
-        df['IDA1_Price'] = pd.NA
+    try:
+        dates = pd.date_range(start=start_date, end=end_date, freq='D')
+        for d in dates:
+            date_str = d.strftime('%Y-%m-%d')
+            url = f"https://dataportal-api.nordpoolgroup.com/api/DayAheadPrices?date={date_str}&market=N2EX_DayAhead&deliveryArea=UK&currency=EUR"
+            r = requests.get(url, timeout=10)
+            if r.status_code == 200:
+                data = r.json()
+                if 'multiAreaEntries' in data:
+                    for entry in data['multiAreaEntries']:
+                        if 'deliveryStart' in entry and 'entryPerArea' in entry and 'UK' in entry['entryPerArea']:
+                            dt = pd.to_datetime(entry['deliveryStart'])
+                            if dt.tzinfo is None:
+                                dt = dt.tz_localize('UTC').tz_convert('Europe/Dublin').tz_localize(None)
+                            else:
+                                dt = dt.tz_convert('Europe/Dublin').tz_localize(None)
+                            val = entry['entryPerArea']['UK']
+                            fetched_data.append({'Datetime': dt, 'GB_DA_Price': float(val)})
+            time.sleep(1)
+    except Exception as e:
+        print(f"Nordpool fetch failed: {e}.")
         
-    df['Datetime'] = pd.to_datetime(df['Datetime']).dt.tz_localize(None)
+    if not fetched_data:
+        print(f"Failed to retrieve valid Nordpool GB DA data for {start_date} to {end_date}. Returning empty DataFrame.")
+        return pd.DataFrame()
+            
+    df = pd.DataFrame(fetched_data).drop_duplicates(subset=['Datetime'])
     return df
 
-def fetch_entsoe_data(start_date: str, end_date: str) -> pd.DataFrame:
-    print(f"Fetching ENTSO-E data from {start_date} to {end_date}...")
-    api_key = os.getenv("ENTSOE_API_KEY")
-    if not api_key:
-        raise ValueError("ENTSOE_API_KEY not found in .env.")
-        
-    dt_start = pd.Timestamp(start_date)
-    dt_end = pd.Timestamp(end_date)
-    
-    years_shift = 0
-    if dt_start.year == 2026:
-        years_shift = 2
-        dt_start = dt_start - pd.DateOffset(years=2)
-        dt_end = dt_end - pd.DateOffset(years=2)
-        
-    client = EntsoePandasClient(api_key=api_key)
-    start = pd.Timestamp(dt_start, tz='Europe/Dublin')
-    end = pd.Timestamp(dt_end, tz='Europe/Dublin')
-    country_code = 'IE_SEM'
-    
-    da_prices = client.query_day_ahead_prices(country_code, start=start, end=end)
-    load = client.query_load(country_code, start=start, end=end)
-    
-    da_df = da_prices.reset_index().rename(columns={'index': 'Datetime', 0: 'DA_Price'})
-    da_df['Datetime'] = da_df['Datetime'].dt.tz_localize(None) + pd.DateOffset(years=years_shift)
-    
-    load_df = load.reset_index().rename(columns={'index': 'Datetime', 'ActualLoad': 'ActualLoad'})
-    load_df['Datetime'] = load_df['Datetime'].dt.tz_localize(None) + pd.DateOffset(years=years_shift)
-    
-    df = pd.merge(da_df, load_df, on='Datetime', how='outer')
-    return df
