@@ -1,5 +1,5 @@
 import pandas as pd
-from pipeline.config import DATA_DIR, CCGT_HEAT_RATE, CCGT_EMISSION_FACTOR, VOM_COST, DEFAULT_GAS_PRICE, DEFAULT_CARBON_PRICE
+from pipeline.config import DATA_DIR, CCGT_HEAT_RATE, CCGT_CARBON_INTENSITY, VOM_COST, DEFAULT_GAS_PRICE, DEFAULT_CARBON_PRICE
 
 def process_and_merge(ea_df, isp_df, eirgrid_df, gb_df):
     """Cleans and merges live data into standard DataFrames for the dashboard."""
@@ -45,7 +45,7 @@ def process_and_merge(ea_df, isp_df, eirgrid_df, gb_df):
     
     spark = pd.merge(s_half_hourly, e_half_hourly, on='Datetime', how='inner')
     
-    spark['SRMC'] = (DEFAULT_GAS_PRICE * CCGT_HEAT_RATE) + (DEFAULT_CARBON_PRICE * CCGT_EMISSION_FACTOR) + VOM_COST
+    spark['SRMC'] = (DEFAULT_GAS_PRICE * CCGT_HEAT_RATE) + (DEFAULT_CARBON_PRICE * CCGT_CARBON_INTENSITY) + VOM_COST
     if 'DAM_Price' in spark.columns:
         spark['SparkSpread'] = spark['DAM_Price'] - spark['SRMC']
     spark.to_csv(DATA_DIR / "spark_spread.csv", index=False)
