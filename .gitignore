@@ -5,6 +5,5 @@ __pycache__/
 *.pyc
 pipeline/cache/
 *.pkl
-data/*.csv
 !data/.keep
 .streamlit/secrets.toml
