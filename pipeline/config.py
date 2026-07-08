@@ -13,7 +13,6 @@ CACHE_DIR.mkdir(exist_ok=True)
 
 SEMOPX_DELAY_S = 2.0
 EIRGRID_DELAY_S = 1.5
-ENTSOE_DELAY_S = 3.0
 
 TIMEZONE = "Europe/Dublin"
 

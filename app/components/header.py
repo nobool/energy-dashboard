@@ -1,5 +1,6 @@
 import streamlit as st
 from components.metrics import load_data
+import pandas as pd
 
 def render_header(title):
     col1, col2 = st.columns([3, 1])
@@ -9,7 +10,7 @@ def render_header(title):
         try:
             smp, _, _ = load_data()
             if not smp.empty and 'Datetime' in smp.columns:
-                min_date = smp['Datetime'].min().strftime('%d %b')
+                min_date = (smp['Datetime'].min() + pd.Timedelta(days=1)).strftime('%d %b')
                 max_date = smp['Datetime'].max().strftime('%d %b %Y')
                 date_str = min_date if min_date == max_date else f"{min_date} – {max_date}"
                 

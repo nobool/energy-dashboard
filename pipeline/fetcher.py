@@ -1,16 +1,27 @@
+from datetime import date
+from pandas._libs.tslibs import timedeltas
 import time
 import os
 import requests
 import pandas as pd
 from datetime import timedelta
 import xml.etree.ElementTree as ET
-from pipeline.config import SEMOPX_DELAY_S, EIRGRID_DELAY_S, ENTSOE_DELAY_S
+from pipeline.config import SEMOPX_DELAY_S, EIRGRID_DELAY_S
 
 def fetch_eirgrid_metric(start_date: str, end_date: str, chart_type: str, areas: str) -> pd.DataFrame:
     headers = {'User-Agent': 'Mozilla/5.0', 'Eirgrid-Content-Request': 'Nextjs'}
     all_data = []
     current = pd.to_datetime(start_date)
     end_dt = pd.to_datetime(end_date)
+    
+    field_map = {
+        'demand': 'SYSTEM_DEMAND',
+        'wind': 'WIND_ACTUAL',
+        'solar': 'SOLAR_ACTUAL',
+        'co2': 'CO2_INTENSITY',
+        'interconnection': 'INTER_NET'
+    }
+    expected_field = field_map.get(chart_type, '')
     
     while current <= end_dt:
         date_str = current.strftime("%d-%b-%Y")
@@ -22,7 +33,7 @@ def fetch_eirgrid_metric(start_date: str, end_date: str, chart_type: str, areas:
         if r.status_code == 200 and 'Rows' in r.json():
             for row in r.json()['Rows']:
                 if 'EffectiveTime' in row and 'Value' in row:
-                    if 'FORECAST' not in row.get('FieldName', ''):
+                    if row.get('FieldName') == expected_field:
                         all_data.append({
                             'Datetime': pd.to_datetime(row['EffectiveTime'], format='%d-%b-%Y %H:%M:%S'),
                             chart_type: row['Value']
@@ -75,34 +86,38 @@ def fetch_semo_imbalance(start_date: str, end_date: str) -> pd.DataFrame:
         'name': 'PUB_30MinAvgImbalPrc',
         'date_from': start_date,
         'date_to': end_date,
-        'page_size': 120,
-        'order_by': 'DESC'
+        'page_size': 500,
+        'order_by': 'DESC',
+        'page': 1
     }
     r = requests.get(url, params=params, timeout=10)
-    if os.getenv("ENVIRONMENT") == "DEVELOPMENT":
-        length = len(r.json().get('items', [])) if r.status_code == 200 and r.json().get('items') else 0
-        print(f"[DEV] HTTP GET {r.url} - Response length: {length} items")
-    if r.status_code == 200 and r.json().get('items'):
-        for item in r.json()['items']:
-            res_name = item['ResourceName']
-            if res_name.endswith('.xml'):
-                xml_url = f"https://reports.sem-o.com/documents/{res_name}"
-                xml_resp = requests.get(xml_url, timeout=10)
-                if os.getenv("ENVIRONMENT") == "DEVELOPMENT":
-                    print(f"[DEV] HTTP GET {xml_resp.url} - Response length: {len(xml_resp.content)} bytes")
-                xml_data = xml_resp.content
-                root = ET.fromstring(xml_data)
-                for elem in root.findall('PUB_30MinAvgImbalPrc'):
-                    start_time = elem.get('StartTime')
-                    isp_str = elem.get('ImbalanceSettlementPrice')
-                    niv_str = elem.get('NetImbalanceVolume')
-                    if start_time and isp_str:
-                        all_data.append({
-                            'Datetime': pd.to_datetime(start_time),
-                            'ISP': float(isp_str),
-                            'NIV': float(niv_str) if niv_str else 0.0
-                        })
-        time.sleep(SEMOPX_DELAY_S)
+    
+    if r.status_code == 200:
+        data = r.json()
+        
+        if os.getenv("ENVIRONMENT") == "DEVELOPMENT":
+            length = len(data.get('items', []))
+            print(f"[DEV] HTTP GET {r.url} - Response length: {length} items")
+            
+        if data.get('items'):
+            for item in data['items']:
+                res_name = item['ResourceName']
+                if res_name.endswith('.xml'):
+                    xml_url = f"https://reports.sem-o.com/documents/{res_name}"
+                    xml_resp = requests.get(xml_url, timeout=10)
+                    if os.getenv("ENVIRONMENT") == "DEVELOPMENT":
+                        print(f"[DEV] HTTP GET {xml_resp.url} - Response length: {len(xml_resp.content)} bytes")
+                    xml_data = xml_resp.content
+                    root = ET.fromstring(xml_data)
+                    for elem in root.findall('PUB_30MinAvgImbalPrc'):
+                        start_time = elem.get('StartTime')
+                        isp_str = elem.get('ImbalanceSettlementPrice')
+                        if start_time and isp_str:
+                            all_data.append({
+                                'Datetime': pd.to_datetime(start_time),
+                                'ISP': float(isp_str)
+                            })
+   
 
     if not all_data:
         raise ConnectionError(f"Could not fetch SEMO Imbalance data for {start_date} to {end_date}.")
@@ -110,6 +125,7 @@ def fetch_semo_imbalance(start_date: str, end_date: str) -> pd.DataFrame:
     df = pd.DataFrame(all_data).drop_duplicates(subset=['Datetime'])
     # SEMO Imbalance returns naive UTC strings, so localize to UTC then convert to Dublin
     df['Datetime'] = pd.to_datetime(df['Datetime']).dt.tz_localize('UTC').dt.tz_convert('Europe/Dublin').dt.tz_localize(None)
+
     return df
 
 def fetch_semopx_ea001(start_date: str, end_date: str) -> pd.DataFrame:
@@ -124,14 +140,19 @@ def fetch_semopx_ea001(start_date: str, end_date: str) -> pd.DataFrame:
         'IDA2': 'MarketResult_SEM-IDA2_PWR-SEM-GB-D_',
         'IDA3': 'MarketResult_SEM-IDA3_PWR-SEM-D_'
     }
-    
+        
+    start_dt = pd.to_datetime(start_date)
+    end_dt = pd.to_datetime(end_date) + pd.Timedelta(days=1)
+    date_from_str = start_dt.strftime('%Y-%m-%dT00:00:00')
+    date_to_str = end_dt.strftime('%Y-%m-%dT02:00:00')
+
     for market, res_name in resource_names.items():
         market_list = []
         params = {
             'DPuG_ID': 'EA-001',
             'ResourceName': res_name,
-            'date_from': start_date,
-            'date_to': end_date,
+            'date_from': date_from_str,
+            'date_to': date_to_str,
             'page_size': 500,
             'order_by': 'DESC'
         }
@@ -191,6 +212,14 @@ def fetch_semopx_ea001(start_date: str, end_date: str) -> pd.DataFrame:
             
     # SEMOpx dates have 'Z' (UTC), so to_datetime parses as tz-aware UTC. Convert to Dublin then strip tz.
     df_final['Datetime'] = pd.to_datetime(df_final['Datetime'], utc=True).dt.tz_convert('Europe/Dublin').dt.tz_localize(None)
+    
+    # The I-SEM Trading Day runs from 23:00 (D-1) to 22:30 (D) local time.
+    start_bound = pd.to_datetime(start_date) - pd.Timedelta(days=1)
+    cutoff_start = pd.to_datetime(start_bound.strftime('%Y-%m-%d') + " 23:00:00")
+    cutoff_end = pd.to_datetime(end_date + " 22:30:00")
+    
+    df_final = df_final[(df_final['Datetime'] >= cutoff_start) & (df_final['Datetime'] <= cutoff_end)]
+    
     return df_final
 
 def fetch_nordpool_gb_da(start_date: str, end_date: str) -> pd.DataFrame:

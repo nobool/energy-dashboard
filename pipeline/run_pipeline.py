@@ -1,17 +1,21 @@
 import argparse
+import os
+from datetime import datetime, timedelta
 from pipeline.fetcher import fetch_semopx_ea001, fetch_semo_imbalance, fetch_eirgrid_data, fetch_nordpool_gb_da
 from pipeline.processor import process_and_merge
-from pipeline.validator import validate_market_data
+
 
 def main():
     parser = argparse.ArgumentParser(description="I-SEM Market Dashboard Data Pipeline")
     parser.add_argument("--full-backfill", action="store_true", help="Fetch full history")
     args = parser.parse_args()
 
-    start_date = "2026-06-29" 
-    end_date = "2026-07-04" 
-    # start_date = "2026-07-03" 
-    # end_date = "2026-07-05" 
+    # Default to 7 days trailing window if environment variables are not set
+    default_end = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+    default_start = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+
+    start_date = os.environ.get("DATE_FROM", default_start)
+    end_date = os.environ.get("DATE_TO", default_end)
 
     print(f"Starting LIVE data pipeline (start: {start_date}, end: {end_date})")
 
@@ -21,11 +25,6 @@ def main():
     gb_df = fetch_nordpool_gb_da(start_date, end_date)
 
     process_and_merge(ea_df, isp_df, eirgrid_df, gb_df)
-    
-    # Validation is temporarily disabled
-    # import pandas as pd
-    # smp_df = pd.merge(ea_df, isp_df, on='Datetime', how='outer')
-    # validate_market_data(smp_df, eirgrid_df, entsoe_df)
     
     print("Pipeline execution completed successfully. Data saved to data/ directory.")
 

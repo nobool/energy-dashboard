@@ -40,3 +40,13 @@ else:
     fig = px.line(spark_df, x='Datetime', y='Custom_SparkSpread', title='Estimated Spark Spread')
     fig.add_hline(y=0, line_dash="dash", line_color="red", annotation_text="Breakeven")
     st.plotly_chart(fig, use_container_width=True)
+
+st.markdown("### Margin Calculation")
+st.markdown("""
+Short Run Marginal Cost (SRMC) is a critical input for ex-ante bidding strategies. For our setup a fairly standard SRMC formula is used
+```text
+SRMC = (Gas Price × Heat Rate) + (Carbon Price × Emission Factor) + VOM
+```
+- **Spark Spread Proxy**: `Spark Spread = SMP - SRMC`
+- A positive spark spread indicates hours where a gas plant (like a CCGT) is "in the money" and should ideally be generating or dispatched.
+""")

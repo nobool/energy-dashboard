@@ -5,19 +5,18 @@ def process_and_merge(ea_df, isp_df, eirgrid_df, gb_df):
     """Cleans and merges live data into standard DataFrames for the dashboard."""
     print("Processing and merging live data...")
     
-    # Combine Ex-Ante (DAM, IDA1, IDA2, IDA3) and Imbalance (ISP, NIV)
+    # Combine Ex-Ante (DAM, IDA1, IDA2, IDA3) and Imbalance (ISP)
     smp_raw = pd.merge(ea_df, isp_df, on='Datetime', how='outer').sort_values('Datetime')
     
     # Forward fill missing values caused by different publication frequencies
     # Keep 30 min granularity
     s_half_hourly = smp_raw.set_index('Datetime').resample('30min').mean().reset_index()
-    for col in ['DAM_Price', 'ISP', 'NIV']:
+    for col in ['DAM_Price', 'ISP']:
         if col in s_half_hourly.columns:
-            s_half_hourly[col] = s_half_hourly[col].ffill().bfill()
-            
+            s_half_hourly[col] = s_half_hourly[col]
     for col in ['IDA1_Price', 'IDA2_Price', 'IDA3_Price']:
         if col in s_half_hourly.columns:
-            s_half_hourly[col] = s_half_hourly[col].ffill().bfill()
+            s_half_hourly[col] = s_half_hourly[col]
             
     # Compute Spreads
     for col in ['DAM', 'IDA1', 'IDA2', 'IDA3']:

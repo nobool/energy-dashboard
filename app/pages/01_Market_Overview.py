@@ -5,7 +5,7 @@ import os
 # Add parent directory to path so we can import components
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from components.metrics import load_data
-from components.charts import plot_market_prices, plot_system_demand_vs_renewables, plot_residual_demand
+from components.charts import plot_market_prices, plot_system_demand_vs_renewables
 from components.sidebar import render_sidebar
 
 st.set_page_config(page_title="Market Overview", layout="wide",page_icon="⚡")
@@ -36,12 +36,7 @@ else:
     if not smp_df.empty:
         st.plotly_chart(plot_market_prices(smp_df), use_container_width=True)
 
-    st.markdown("### System Demand vs Solar and Wind Generation")
+    st.markdown("### System Demand vs Renewables")
     if not grid_df.empty:
         st.plotly_chart(plot_system_demand_vs_renewables(grid_df), use_container_width=True)
         st.caption("*Note: EirGrid system data is displayed here at its native 15-minute granularity to capture rapid system fluctuations. It is downsampled to 30-minute intervals in backend processing strictly when aligning with ex-ante market settlement periods.*")
-
-    st.markdown("### Total System Demand vs Residual Demand")
-    if not grid_df.empty:
-        st.plotly_chart(plot_residual_demand(grid_df), use_container_width=True)
-
