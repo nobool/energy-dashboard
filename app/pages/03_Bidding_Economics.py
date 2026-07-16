@@ -15,6 +15,12 @@ st.write("Rough estimates for spark spread and plant margins.")
 
 _, _, spark_df = load_data()
 
+# SRMC Constants
+ccgt_efficiency = 0.50
+heat_rate = 1 / ccgt_efficiency
+gas_emission_factor = 0.202
+vom = 5.0
+
 if spark_df.empty:
     st.warning("Data not available.")
 else:
@@ -22,15 +28,9 @@ else:
     gas_price = st.sidebar.slider("Gas Price (€/MWh)", 10.0, 150.0, 30.0, step=1.0)
     carbon_price = st.sidebar.slider("Carbon Price (€/tonne)", 10.0, 150.0, 70.0, step=1.0)
     
-    # SRMC = Fuel Cost + Carbon Cost + VOM
-    ccgt_efficiency = 0.50
-    heat_rate = 1 / ccgt_efficiency # MWh_th per MWh_e
-    gas_emission_factor = 0.202 # tCO2 per MWh_th
-    carbon_intensity = gas_emission_factor * heat_rate
-    
-    fuel_cost = gas_price * heat_rate
-    carbon_cost = carbon_price * carbon_intensity
-    srmc = fuel_cost + carbon_cost + 5.0
+
+    carbon_cost = carbon_price * gas_emission_factor
+    srmc = ((gas_price + carbon_cost) * heat_rate) + vom
     spark_df['Custom_SRMC'] = srmc
     spark_df['Custom_SparkSpread'] = spark_df['DAM_Price'] - srmc
     
@@ -42,11 +42,18 @@ else:
     st.plotly_chart(fig, use_container_width=True)
 
 st.markdown("### Margin Calculation")
-st.markdown("""
+st.markdown(f"""
 Short Run Marginal Cost (SRMC) is a critical input for ex-ante bidding strategies. For our setup a fairly standard SRMC formula is used
 ```text
-SRMC = (Gas Price × Heat Rate) + (Carbon Price × Emission Factor) + VOM
+SRMC = ((Gas Price + (Carbon Price × Emission Factor)) * Heat Rate) + VOM
 ```
-- **Spark Spread Proxy**: `Spark Spread = SMP - SRMC`
+
+**Constants Used:**
+- **CCGT Efficiency**: {ccgt_efficiency*100:.0f}%
+- **Heat Rate**: {heat_rate:.2f} (1 / CCGT Efficiency)
+- **Emission Factor**: {gas_emission_factor:.3f} CO₂e / kWh
+- **VOM (Variable O&M)**: € {vom:.2f} /MWh
+
+- **Spark Spread Proxy**: `Spark Spread = DAM Price - SRMC`
 - A positive spark spread indicates hours where a gas plant (like a CCGT) is "in the money" and should ideally be generating or dispatched.
 """)
