@@ -18,6 +18,6 @@ if grid_df.empty or smp_df.empty:
     st.warning("Data not available.")
 else:
     st.plotly_chart(plot_day_ahead_prices(smp_df), use_container_width=True)
-    st.caption("*Note: Nord Pool N2EX was used as the GB Day-Ahead Price due to fairly small price variance compared to EPEX Spot. A single source was chosen since the markets are no longer implicitly coupled post-Brexit.*")
+    st.caption("*Note: Nord Pool N2EX was used as the GB Day-Ahead Price. The GB and Irish Day Ahead markets are no longer implicitly coupled post-Brexit.*")
 
     st.plotly_chart(plot_interconnector_flows_price_variance(smp_df, grid_df), use_container_width=True)

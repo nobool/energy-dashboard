@@ -21,6 +21,9 @@ jobs:
         with:
           # Explicitly checkout the release branch so we commit there
           ref: release
+          # Use a Personal Access Token (PAT) instead of the default GITHUB_TOKEN
+          # This is required for GitHub to fire the webhook that tells Streamlit to redeploy
+          token: ${{ secrets.PAT }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
