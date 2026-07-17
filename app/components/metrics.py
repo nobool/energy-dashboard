@@ -9,7 +9,7 @@ def load_data():
         # after a bot commit, its mtime changes, busting the cache automatically.
         df = pd.read_csv(path)
         if 'Datetime' in df.columns:
-            df['Datetime'] = pd.to_datetime(df['Datetime'])
+            df['Datetime'] = pd.to_datetime(df['Datetime'], format='mixed')
         return df
 
     # Assuming app is run from energy-dashboard root
